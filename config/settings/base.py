@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -42,7 +43,6 @@ LOCAL_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
-    'tenants.middleware.TenantMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'tenants.middleware.TenantMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -152,7 +153,6 @@ REST_FRAMEWORK = {
 }
 
 # ── JWT ──
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -176,6 +176,9 @@ CACHES = {
     }
 }
 
+# Rate limiter uses Redis cache
+RATELIMIT_USE_CACHE = 'default'
+
 # ── Celery ──
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/1')
 CELERY_RESULT_BACKEND = 'django-db'
@@ -185,30 +188,22 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
+CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
-CELERY_TASK_ACKS_LATE = True  # Fault tolerance: only ack after completion
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # One task at a time per worker
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
-# ── Django Channels ──
-# Production: use Redis channel layer
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-#         'CONFIG': {
-#             'hosts': [REDIS_URL],
-#         },
-#     },
-# }
-# Development: use in-memory channel layer (no external dependency)
+# ── Django Channels (Redis) ──
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [REDIS_URL],
+        },
     },
 }
 
-# ── Structlog ──
-import structlog
+# ── Logging ──
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -226,13 +221,11 @@ LOGGING = {
 # ── AI (Gemini) ──
 GOOGLE_API_KEY = config('GOOGLE_API_KEY', default='')
 
+# ── Auth ──
 LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 
 # ── Security Headers ──
-# Prevent clickjacking
 X_FRAME_OPTIONS = 'DENY'
-# Prevent MIME-type sniffing
 SECURE_CONTENT_TYPE_NOSNIFF = True
-# Enable XSS filter in modern browsers
 SECURE_BROWSER_XSS_FILTER = True

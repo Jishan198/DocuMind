@@ -1,0 +1,70 @@
+if u fogot....this was our project.......The Project: DocuMind — Multi-Tenant AI Document Intelligence Platform
+The problem it solves: Enterprises drown in internal documents — contracts, SOPs, reports, policies. Employees waste hours searching. DocuMind lets organizations upload documents, ask natural language questions, and get cited answers — with full access control, audit logs, and async processing pipelines.
+Think: "ChatGPT for your company's private documents" — but built with production-grade backend architecture.
+Why This Works
+Recruiter SeesWhat's Actually Behind It"AI Q&A over documents"RAG pipeline with LangChain + pgvector"Multi-tenant SaaS"Row-Level Security, RBAC, JWT"Real-time processing"Celery + Redis + WebSockets via HTMX"Handles 10k docs"Chunking strategy, async ingestion, caching"Audit logs"PostgreSQL triggers, structured logging
+Full Tech Stack Mapping
+
+```
+Authentication & Authorization → JWT + OAuth2 (Google SSO), RBAC with Django Guardian
+API Design                     → DRF with versioning, throttling, cursor pagination
+AI Integration                 → LangChain, OpenAI/Gemini, pgvector (PostgreSQL extension)
+Async Processing               → Celery + Redis (document ingestion pipeline)
+Caching                        → Redis (query cache, session cache)
+Database                       → PostgreSQL + pgvector, Row-Level Security per tenant
+Search                         → Hybrid search (vector similarity + full-text via pg_tsvector)
+Real-time UI                   → HTMX + Django Channels (WebSocket for progress updates)
+Security                       → Rate limiting, input sanitization, tenant isolation
+Fault Tolerance                → Celery retry logic, dead-letter queues, circuit breaker pattern
+Performance                    → Query optimization, DB indexing, connection pooling (PgBouncer)
+Observability                  → Structured logging (structlog), health check endpoints
+Deployment (later)             → Docker + Docker Compose → AWS/GCP + CI/CD
+```
+
+Core Features (MVP Scope)
+1. Tenant onboarding — register org, invite members, role assignment
+2. Document ingestion pipeline — upload PDF/DOCX → chunk → embed → store in pgvector
+3. AI Q&A interface — ask questions, get answers with source citations
+4. Access control — users only query documents their role permits
+5. Audit log — every query, upload, deletion logged with actor + timestamp
+6. Usage dashboard — queries/month, docs count, token consumption (HTMX-powered)
+7. API layer — full DRF API so it's usable by external clients too
+What Makes It "5-Year Level"
+* Multi-tenancy is something juniors never build. It shows system design maturity.
+* pgvector inside PostgreSQL — no separate vector DB needed. Shows you think about operational simplicity.
+* Celery pipeline with retry/dead-letter — shows you understand distributed systems failure modes.
+* Hybrid search (semantic + keyword) — shows you understand real-world search tradeoffs.
+How We'll Build It
+I'd suggest breaking it into phases:
+* Phase 1 — Project setup, auth system, multi-tenancy foundation
+* Phase 2 — Document ingestion pipeline (Celery + chunking + pgvector)
+* Phase 3 — LangChain RAG query engine
+* Phase 4 — HTMX frontend, real-time progress, dashboard
+* Phase 5 — Security hardening, rate limiting, audit logs
+* Phase 6 — Docker + deployment
+
+
+
+
+
+
+
+
+
+
+What Was Promised vs What Was Built
+FeaturePromisedBuiltStatusTenant onboarding + org registration✅✅DoneInvite members + role assignment✅❌ No UI, API onlyMissingDocument ingestion pipeline✅✅DoneAI Q&A with citations✅✅DoneAccess control by role✅⚠️ Partial — OWNER/ADMIN enforced, VIEWER/MEMBER not differentiatedIncompleteAudit log — every action logged✅✅ Backend done, no UIPartialUsage dashboard — token consumption✅⚠️ Shows doc count + queries, no token usagePartialFull DRF API layer✅✅DoneJWT Auth✅✅DoneGoogle SSO✅❌ Deferred, never builtMissingLangChain✅❌ Replaced with google-genai SDK directlyReplacedpgvector hybrid search✅✅ Vector + trigramDoneCelery + retry logic✅✅DoneDead-letter queues✅❌ Not implementedMissingCircuit breaker pattern✅❌ Not implementedMissingRedis caching✅✅ Cache + brokerDoneQuery result caching✅❌ Not implementedMissingRate limiting✅✅DoneInput sanitization✅✅DoneWebSocket real-time progress✅✅DoneStructlog observability✅✅DoneHealth check endpoints✅❌ Not builtMissingPgBouncer connection pooling✅❌ Not implementedMissingDocker + Compose✅⚠️ Compose done, build failingPartialAWS deployment✅❌ Not done yetMissing
+
+Priority Order to Complete
+High priority — these are things recruiters will look for:
+
+VIEWER/MEMBER role enforcement — documents and queries should respect roles
+Query result caching — cache identical queries in Redis, show cache hit in response
+Health check endpoint — /health/ returning DB + Redis + Celery status
+Audit log page in UI — visible to OWNER only
+Token consumption in dashboard — already stored in QueryLog, just needs to show in UI
+Fix Docker build — the pip install failure
+
+Medium priority:
+7. Dead-letter queue — Celery task_reject_on_worker_lost + dedicated DLQ queue
+8. Invite members UI — form to invite by email
