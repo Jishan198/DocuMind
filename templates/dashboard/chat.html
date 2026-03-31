@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block title %}Ask DocuMind{% endblock %}
+{% block extra_styles %}
+<style>
+    .chat-wrap {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 200px);
+        min-height: 500px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+    .chat-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .chat-status-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+        animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .msg-user {
+        display: flex;
+        justify-content: flex-end;
+        align-items: flex-end;
+        gap: 8px;
+    }
+    .msg-user .bubble {
+        background: linear-gradient(135deg, #6366f1, #7c3aed);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 16px 16px 4px 16px;
+        max-width: 65%;
+        font-size: 14px;
+        line-height: 1.6;
+        box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+    }
+    .msg-ai {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .ai-avatar {
+        width: 32px; height: 32px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+    .msg-ai .bubble {
+        background: var(--bg-hover);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 14px 18px;
+        border-radius: 4px 16px 16px 16px;
+        max-width: 75%;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+    .sources-wrap {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .source-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(99,102,241,0.2);
+        border-radius: 6px;
+        font-size: 11px;
+        color: var(--accent-light);
+        font-weight: 500;
+    }
+    .thinking-dots span {
+        display: inline-block;
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        margin: 0 2px;
+        animation: bounce 1.2s infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-6px); }
+    }
+    .chat-footer {
+        padding: 16px 20px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-surface);
+    }
+    .input-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    .chat-textarea {
+        flex: 1;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 16px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+        max-height: 120px;
+        line-height: 1.5;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .chat-textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .chat-textarea::placeholder { color: var(--text-muted); }
+    .send-btn {
+        width: 44px; height: 44px;
+        background: linear-gradient(135deg, #6366f1, #7c3aed);
+        border: none;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s;
+        flex-shrink: 0;
+        box-shadow: 0 0 16px rgba(99,102,241,0.3);
+    }
+    .send-btn:hover { transform: scale(1.05); box-shadow: 0 0 24px rgba(99,102,241,0.5); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header" style="margin-bottom:20px;">
+    <h1 class="page-title">Ask DocuMind</h1>
+    <p class="page-subtitle">Chat with your documents using AI</p>
+</div>
+
+<div class="chat-wrap">
+    <div class="chat-header">
+        <div class="chat-status-dot"></div>
+        <span style="font-size:14px;font-weight:500;color:var(--text-primary);">DocuMind AI</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">· Semantic search across your documents</span>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+        <div style="text-align:center;padding:40px 20px;opacity:0.6;">
+            <div style="width:48px;height:48px;background:var(--accent-dim);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                <svg width="22" height="22" fill="none" stroke="var(--accent-light)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            </div>
+            <p style="font-size:15px;font-weight:500;color:var(--text-secondary);margin-bottom:4px;">Ask anything about your documents</p>
+            <p style="font-size:13px;color:var(--text-muted);">DocuMind will find relevant passages and generate a cited answer</p>
+        </div>
+    </div>
+
+    <div class="chat-footer">
+        <div class="input-row">
+            <textarea class="chat-textarea"
+                      id="question-input"
+                      placeholder="e.g. What are the key findings in the report?"
+                      rows="1"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendQuery();}"
+                      oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendQuery()">
+                <svg id="send-icon" width="18" height="18" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                <div id="send-spinner" class="spinner" style="display:none;border-color:rgba(255,255,255,0.3);border-top-color:white;"></div>
+            </button>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">Press Enter to send · Shift+Enter for new line</p>
+    </div>
+</div>
+
+<script>
+const ORG_ID = "{{ org_id }}";
+const ACCESS_TOKEN = "{{ access_token }}";
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(text));
+    return d.innerHTML;
+}
+
+function sendQuery() {
+    const input = document.getElementById('question-input');
+    const question = input.value.trim();
+    if (!question) return;
+
+    const messages = document.getElementById('chat-messages');
+    const btn = document.getElementById('send-btn');
+    const icon = document.getElementById('send-icon');
+    const spinner = document.getElementById('send-spinner');
+
+    messages.innerHTML += `
+        <div class="msg-user">
+            <div class="bubble">${escapeHtml(question)}</div>
+        </div>`;
+
+    const thinkingId = 'thinking-' + Date.now();
+    messages.innerHTML += `
+        <div class="msg-ai" id="${thinkingId}">
+            <div class="ai-avatar">D</div>
+            <div class="bubble">
+                <div class="thinking-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        </div>`;
+
+    messages.scrollTop = messages.scrollHeight;
+    input.value = '';
+    input.style.height = 'auto';
+    btn.disabled = true;
+    icon.style.display = 'none';
+    spinner.style.display = 'flex';
+
+    fetch('/api/v1/search/query/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + ACCESS_TOKEN,
+            'X-Organization-ID': ORG_ID,
+        },
+        body: JSON.stringify({ question })
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById(thinkingId)?.remove();
+
+        let sourcesHtml = '';
+        if (data.sources?.length) {
+            sourcesHtml = `<div class="sources-wrap">`;
+            data.sources.forEach(s => {
+                sourcesHtml += `<span class="source-chip">
+                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    ${escapeHtml(s.document_title)} · p.${s.page_number}
+                </span>`;
+            });
+            sourcesHtml += `</div>`;
+        }
+
+        messages.innerHTML += `
+            <div class="msg-ai">
+                <div class="ai-avatar">D</div>
+                <div class="bubble">
+                    ${escapeHtml(data.answer || data.error || 'Something went wrong.')}
+                    ${sourcesHtml}
+                </div>
+            </div>`;
+    })
+    .catch(() => {
+        document.getElementById(thinkingId)?.remove();
+        messages.innerHTML += `
+            <div class="msg-ai">
+                <div class="ai-avatar">D</div>
+                <div class="bubble" style="color:var(--danger);">Failed to connect. Please try again.</div>
+            </div>`;
+    })
+    .finally(() => {
+        btn.disabled = false;
+        icon.style.display = 'block';
+        spinner.style.display = 'none';
+        messages.scrollTop = messages.scrollHeight;
+    });
+}
+</script>
+{% endblock %}

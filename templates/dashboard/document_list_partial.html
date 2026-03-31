@@ -1,0 +1,40 @@
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div class="card-title" style="margin-bottom:0;">All Documents</div>
+    <span style="font-size:12px;color:var(--text-muted);">Auto-refreshes every 4s</span>
+</div>
+{% if documents %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Chunks</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td style="color:var(--text-primary);font-weight:450;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ doc.title }}</td>
+                <td><span style="background:var(--accent-dim);color:var(--accent-light);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">{{ doc.file_type }}</span></td>
+                <td><span class="badge badge-{{ doc.status|lower }}">{{ doc.status }}</span></td>
+                <td>{{ doc.chunk_count }}</td>
+                <td>{{ doc.file_size|filesizeformat }}</td>
+                <td>{{ doc.created_at|date:"M d, H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div style="text-align:center;padding:60px 20px;">
+    <div style="width:56px;height:56px;background:var(--accent-dim);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+        <svg width="24" height="24" fill="none" stroke="var(--accent-light)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    </div>
+    <p style="color:var(--text-secondary);font-size:15px;margin-bottom:6px;">No documents uploaded yet</p>
+    <p style="color:var(--text-muted);font-size:13px;">Use the form above to upload your first document</p>
+</div>
+{% endif %}

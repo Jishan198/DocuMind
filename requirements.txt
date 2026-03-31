@@ -1,0 +1,52 @@
+# ── Core Framework ──
+Django==5.1.7                    # Web framework
+djangorestframework==3.16.0     # REST API toolkit (DRF)
+django-cors-headers==4.7.0      # Cross-origin request handling
+
+# ── Authentication & Authorization ──
+djangorestframework-simplejwt==5.5.0   # JWT token auth (includes PyJWT automatically)
+django-guardian==2.4.0                  # Object-level permissions (RBAC)
+
+# ── Database ──
+psycopg[binary]==3.2.8          # PostgreSQL adapter (async-ready)
+pgvector==0.3.6                 # pgvector Python client
+
+# ── Async Processing ──
+celery==5.5.2                   # Distributed task queue
+redis==5.3.0                    # Redis client (broker + cache)
+django-celery-results==2.5.1    # Store Celery results in Django DB
+django-celery-beat==2.7.0       # Periodic task scheduler
+
+# ── AI / RAG Pipeline ──
+langchain==0.3.25               # LLM orchestration framework
+langchain-openai==0.3.14        # OpenAI integration
+langchain-google-genai==2.1.4   # Gemini integration
+langchain-community==0.3.24     # Community integrations (pgvector retriever)
+openai==1.75.0                  # OpenAI SDK
+tiktoken==0.9.0                 # Token counting
+
+# ── Document Processing ──
+PyPDF2==3.0.1                   # PDF text extraction
+python-docx==1.1.2              # DOCX text extraction
+python-magic-bin==0.4.14        # File type detection (Windows)
+
+# ── Real-time & Frontend ──
+channels==4.2.0                 # Django WebSocket support
+channels-redis==4.2.1           # Redis backend for Channels
+daphne==4.1.2                   # ASGI server for Channels
+django-htmx==1.22.0             # HTMX integration
+
+# ── Security & Middleware ──
+django-ratelimit==4.1.0         # Rate limiting
+django-filter==25.1             # Queryset filtering for DRF
+bleach==6.2.0                   # Input sanitization
+
+# ── Observability & Dev Tools ──
+structlog==25.3.0               # Structured logging
+django-extensions==3.2.3        # Management command extras
+django-debug-toolbar==5.1.0     # Debug toolbar (dev only)
+
+# ── Utilities ──
+python-decouple==3.8            # Environment variable management
+gunicorn==23.0.0                # Production WSGI server
+whitenoise==6.9.0               # Static file serving

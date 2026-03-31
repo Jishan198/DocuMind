@@ -1,0 +1,414 @@
+{% extends 'base.html' %}
+{% block title %}Documents — DocuMind{% endblock %}
+{% block extra_styles %}
+<style>
+    .upload-zone {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 48px 32px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+        border-color: var(--accent);
+        background: var(--accent-dim);
+    }
+    .upload-zone input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+    }
+    @keyframes pulse-ring {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
+        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(99,102,241,0); }
+        100% { transform: scale(0.95); }
+    }
+    .upload-icon-wrap {
+        width: 64px; height: 64px;
+        background: var(--accent-dim);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+        transition: all 0.2s;
+    }
+    .upload-zone:hover .upload-icon-wrap {
+        animation: pulse-ring 1.5s infinite;
+    }
+
+    /* ── Progress Tracker ── */
+    .progress-panel {
+        display: none;
+        margin-bottom: 24px;
+    }
+    .progress-panel.active { display: block; }
+    .progress-item {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    .progress-item.processing {
+        border-color: var(--accent);
+        box-shadow: 0 0 20px rgba(99,102,241,0.1);
+    }
+    .progress-item.complete {
+        border-color: var(--success);
+    }
+    .progress-item.failed {
+        border-color: var(--danger);
+    }
+    .progress-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .progress-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .progress-status {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 3px 10px;
+        border-radius: 999px;
+    }
+    .progress-status.processing {
+        background: rgba(99,102,241,0.15);
+        color: var(--accent-light);
+    }
+    .progress-status.complete {
+        background: rgba(16,185,129,0.12);
+        color: #34d399;
+    }
+    .progress-status.failed {
+        background: rgba(239,68,68,0.12);
+        color: #f87171;
+    }
+    .progress-bar-track {
+        width: 100%;
+        height: 6px;
+        background: var(--bg-surface);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa);
+        background-size: 200% 100%;
+        animation: shimmer 2s linear infinite;
+    }
+    .progress-bar-fill.complete {
+        background: var(--success);
+        animation: none;
+    }
+    .progress-bar-fill.failed {
+        background: var(--danger);
+        animation: none;
+    }
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    .progress-message {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+    .progress-stages {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .stage-dot {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--text-muted);
+        padding: 3px 8px;
+        background: var(--bg-surface);
+        border-radius: 4px;
+        transition: all 0.3s;
+    }
+    .stage-dot.active {
+        color: var(--accent-light);
+        background: var(--accent-dim);
+    }
+    .stage-dot.done {
+        color: #34d399;
+        background: rgba(16,185,129,0.12);
+    }
+    .stage-dot::before {
+        content: '';
+        width: 5px; height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+    .ws-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--text-muted);
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+    }
+    .ws-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--danger);
+        transition: background 0.3s;
+    }
+    .ws-dot.connected {
+        background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <h1 class="page-title">Documents</h1>
+            <p class="page-subtitle">Upload and manage your organization's documents</p>
+        </div>
+        <div class="ws-indicator">
+            <div class="ws-dot" id="ws-dot"></div>
+            <span id="ws-label">Connecting...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time Progress Panel -->
+<div class="progress-panel" id="progress-panel"></div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
+    <div class="card">
+        <div class="card-title">Upload New Document</div>
+        <div id="upload-feedback"></div>
+        <form id="upload-form"
+              hx-post="{% url 'upload_document' %}"
+              hx-target="#upload-feedback"
+              hx-encoding="multipart/form-data"
+              hx-on::after-request="this.reset(); document.getElementById('file-name').textContent='No file selected';">
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="form-label">Document Title</label>
+                <input type="text" name="title" class="form-input" placeholder="e.g. Q3 Financial Report" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">File</label>
+                <div class="upload-zone" id="drop-zone">
+                    <input type="file" name="file" accept=".pdf,.docx,.txt" required
+                           onchange="document.getElementById('file-name').textContent=this.files[0]?.name||'No file selected'">
+                    <div class="upload-icon-wrap">
+                        <svg width="28" height="28" fill="none" stroke="var(--accent-light)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    </div>
+                    <p style="font-size:14px;font-weight:500;color:var(--text-secondary);margin-bottom:4px;">Drop file here or click to browse</p>
+                    <p id="file-name" style="font-size:12px;color:var(--text-muted);">PDF, DOCX, TXT — max 20MB</p>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                <span class="htmx-indicator spinner"></span>
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Upload & Process
+            </button>
+        </form>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="flex:1;">
+            <div class="card-title">Supported Formats</div>
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <div style="width:36px;height:36px;background:var(--accent-dim);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent-light);">PDF</div>
+                <div><div style="font-size:13px;font-weight:500;color:var(--text-primary);">PDF Documents</div><div style="font-size:12px;color:var(--text-muted);">Reports, contracts, manuals</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <div style="width:36px;height:36px;background:var(--accent-dim);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent-light);">DOC</div>
+                <div><div style="font-size:13px;font-weight:500;color:var(--text-primary);">Word Documents</div><div style="font-size:12px;color:var(--text-muted);">Policies, proposals, notes</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;">
+                <div style="width:36px;height:36px;background:var(--accent-dim);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent-light);">TXT</div>
+                <div><div style="font-size:13px;font-weight:500;color:var(--text-primary);">Plain Text</div><div style="font-size:12px;color:var(--text-muted);">Logs, markdown, raw text</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card"
+     id="documents-list"
+     hx-get="{% url 'document_list_partial' %}"
+     hx-trigger="load, every 4s"
+     hx-swap="innerHTML">
+    <div style="text-align:center;padding:32px;color:var(--text-muted);">
+        <div class="spinner" style="margin:0 auto 12px;border-color:rgba(99,102,241,0.3);border-top-color:var(--accent);"></div>
+        Loading documents...
+    </div>
+</div>
+
+<script>
+const ORG_ID = "{{ org_id }}";
+const STAGES = ['extracting', 'chunking', 'embedding', 'saving', 'complete'];
+const STAGE_LABELS = {
+    extracting: 'Extract',
+    chunking: 'Chunk',
+    embedding: 'Embed',
+    saving: 'Save',
+    complete: 'Done'
+};
+
+// Track active documents being processed
+const activeDocuments = {};
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/documents/progress/${ORG_ID}/`;
+    const ws = new WebSocket(wsUrl);
+
+    const dot = document.getElementById('ws-dot');
+    const label = document.getElementById('ws-label');
+
+    ws.onopen = () => {
+        dot.classList.add('connected');
+        label.textContent = 'Live';
+    };
+
+    ws.onclose = () => {
+        dot.classList.remove('connected');
+        label.textContent = 'Reconnecting...';
+        // Auto-reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+    };
+
+    ws.onerror = () => {
+        dot.classList.remove('connected');
+        label.textContent = 'Disconnected';
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleProgress(data);
+    };
+}
+
+function handleProgress(data) {
+    const panel = document.getElementById('progress-panel');
+    panel.classList.add('active');
+
+    let item = document.getElementById(`progress-${data.document_id}`);
+    if (!item) {
+        item = createProgressItem(data);
+        panel.prepend(item);
+    }
+
+    updateProgressItem(item, data);
+    activeDocuments[data.document_id] = data;
+
+    // Auto-remove completed/failed items after 8 seconds
+    if (data.status === 'READY' || data.status === 'FAILED') {
+        setTimeout(() => {
+            item.style.opacity = '0';
+            item.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                item.remove();
+                delete activeDocuments[data.document_id];
+                if (Object.keys(activeDocuments).length === 0) {
+                    panel.classList.remove('active');
+                }
+            }, 300);
+        }, 8000);
+    }
+}
+
+function createProgressItem(data) {
+    const item = document.createElement('div');
+    item.className = 'progress-item processing';
+    item.id = `progress-${data.document_id}`;
+    item.style.transition = 'all 0.3s ease';
+    item.innerHTML = `
+        <div class="progress-header">
+            <div class="progress-title">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="progress-doc-title">${escapeHtml(data.title)}</span>
+            </div>
+            <span class="progress-status processing">Processing</span>
+        </div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-message">Starting...</div>
+        <div class="progress-stages">
+            ${STAGES.map(s => `<span class="stage-dot" data-stage="${s}">${STAGE_LABELS[s]}</span>`).join('')}
+        </div>
+    `;
+    return item;
+}
+
+function updateProgressItem(item, data) {
+    const bar = item.querySelector('.progress-bar-fill');
+    const message = item.querySelector('.progress-message');
+    const statusBadge = item.querySelector('.progress-status');
+    const currentStageIndex = STAGES.indexOf(data.stage);
+
+    // Update progress bar
+    bar.style.width = data.progress + '%';
+
+    // Update message
+    message.textContent = data.message;
+
+    // Update stage dots
+    const dots = item.querySelectorAll('.stage-dot');
+    dots.forEach((dot, i) => {
+        dot.classList.remove('active', 'done');
+        if (i < currentStageIndex) dot.classList.add('done');
+        else if (i === currentStageIndex) dot.classList.add('active');
+    });
+
+    // Update status badge and item style
+    if (data.status === 'READY') {
+        item.className = 'progress-item complete';
+        bar.classList.add('complete');
+        statusBadge.className = 'progress-status complete';
+        statusBadge.textContent = '✓ Ready';
+    } else if (data.status === 'FAILED') {
+        item.className = 'progress-item failed';
+        bar.classList.add('failed');
+        statusBadge.className = 'progress-status failed';
+        statusBadge.textContent = '✗ Failed';
+    } else {
+        statusBadge.textContent = data.progress + '%';
+    }
+}
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(text));
+    return d.innerHTML;
+}
+
+// Connect WebSocket on page load
+if (ORG_ID) {
+    connectWebSocket();
+} else {
+    document.getElementById('ws-label').textContent = 'No org';
+}
+</script>
+{% endblock %}
