@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.http import HttpResponse
 from django.utils.text import slugify
+from django.core.cache import cache
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 from tenants.models import Organization, Membership
@@ -16,23 +17,38 @@ from documents.utils import sanitize_text
 
 logger = structlog.get_logger(__name__)
 
-@ratelimit(key='ip', rate='5/m', block=False)
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
+
+
 def login_view(request):
-    if getattr(request, 'limited', False):
-        return render(request, 'auth/login.html', {'error': 'Too many login attempts. Please try again in a minute.'})
+    ip = get_client_ip(request)
+    cache_key = f'login_attempts_{ip}'
+    attempts = cache.get(cache_key, 0)
+
+    if attempts >= 5:
+        return render(request, 'auth/login.html', {
+            'error': 'Too many login attempts. Please try again in a minute.'
+        })
+
     if request.user.is_authenticated:
-        # Only redirect if user has an org, otherwise let them see login page
         has_org = Membership.objects.filter(user=request.user, is_active=True).exists()
         if has_org:
             return redirect('dashboard')
+
     if request.method == 'POST':
+        cache.set(cache_key, attempts + 1, timeout=60)
         email = request.POST.get('email')
         password = request.POST.get('password')
         try:
             user = User.objects.get(email=email)
             if user.check_password(password):
+                cache.delete(cache_key)
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-                # Log successful login
                 membership = Membership.objects.filter(user=user, is_active=True).first()
                 org = membership.organization if membership else None
                 log_action(user, org, 'USER_LOGGED_IN', request)
@@ -41,18 +57,27 @@ def login_view(request):
                 return render(request, 'auth/login.html', {'error': 'Invalid credentials.'})
         except User.DoesNotExist:
             return render(request, 'auth/login.html', {'error': 'No account with this email.'})
+
     return render(request, 'auth/login.html')
 
-@ratelimit(key='ip', rate='5/m', block=False)
+
 def register_view(request):
-    if getattr(request, 'limited', False):
-        return render(request, 'auth/register.html', {'error': 'Too many registration attempts. Please try again later.'})
+    ip = get_client_ip(request)
+    cache_key = f'register_attempts_{ip}'
+    attempts = cache.get(cache_key, 0)
+
+    if attempts >= 5:
+        return render(request, 'auth/register.html', {
+            'error': 'Too many registration attempts. Please try again later.'
+        })
+
     if request.user.is_authenticated:
-        # Only redirect if user already has an org — prevents redirect loop
         has_org = Membership.objects.filter(user=request.user, is_active=True).exists()
         if has_org:
             return redirect('dashboard')
+
     if request.method == 'POST':
+        cache.set(cache_key, attempts + 1, timeout=60)
         email = request.POST.get('email')
         username = request.POST.get('username')
         password = request.POST.get('password')
@@ -65,7 +90,6 @@ def register_view(request):
             email=email, username=username, password=password
         )
         slug = slugify(org_name)
-        # Ensure unique slug
         base_slug = slug
         counter = 1
         while Organization.objects.filter(slug=slug).exists():
@@ -74,10 +98,8 @@ def register_view(request):
 
         org = Organization.objects.create(name=org_name, slug=slug)
         Membership.objects.create(user=user, organization=org, role=Membership.Role.OWNER)
-        
-        # Log successful registration
+        cache.delete(cache_key)
         log_action(user, org, 'USER_REGISTERED', request, payload={'email': email, 'org_name': org_name})
-        
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         return redirect('dashboard')
 
@@ -90,7 +112,6 @@ def logout_view(request):
 
 
 def get_user_org(request):
-    """Get the first active organization for the logged-in user."""
     membership = Membership.objects.filter(
         user=request.user, is_active=True
     ).select_related('organization').first()
@@ -101,12 +122,10 @@ def get_user_org(request):
 def dashboard(request):
     org = get_user_org(request)
     if not org:
-        # Log out the orphan user and send to register — prevents redirect loop
         logout(request)
         return redirect('register_view')
 
     from django.utils import timezone
-    from datetime import timedelta
     month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0)
 
     documents = Document.objects.filter(organization=org).order_by('-created_at')[:10]
@@ -148,12 +167,12 @@ def chat_view(request):
 def upload_document(request):
     if getattr(request, 'limited', False):
         return HttpResponse('<div class="alert alert-error">Rate limit exceeded. Please wait a minute before uploading again.</div>')
+
     from documents.models import Document
     from documents.tasks import ingest_document
 
     org = get_user_org(request)
     file = request.FILES.get('file')
-    # Sanitize the title with bleach to prevent stored XSS
     raw_title = request.POST.get('title', file.name if file else 'Untitled')
     title = sanitize_text(raw_title)
 
@@ -176,18 +195,11 @@ def upload_document(request):
         file_size=file.size,
         status=Document.Status.PENDING
     )
-    
-    # Log the document upload
     log_action(
-        request.user, 
-        org, 
-        'DOCUMENT_UPLOADED', 
-        request, 
+        request.user, org, 'DOCUMENT_UPLOADED', request,
         payload={'document_id': str(document.id), 'title': title, 'size': file.size}
     )
-    
     ingest_document.delay(str(document.id))
-
     return HttpResponse(f'<div class="alert alert-success">✓ "{title}" uploaded. Processing started.</div>')
 
 
@@ -196,5 +208,4 @@ def document_list_partial(request):
     org = get_user_org(request)
     documents = Document.objects.filter(organization=org).order_by('-created_at')
     return render(request, 'dashboard/document_list_partial.html', {'documents': documents})
-
 # Create your views here.
