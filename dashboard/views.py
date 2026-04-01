@@ -41,7 +41,12 @@ def login_view(request):
             return redirect('dashboard')
 
     if request.method == 'POST':
-        cache.set(cache_key, attempts + 1, timeout=60)
+        new_attempts = (attempts or 0) + 1
+        cache.set(cache_key, new_attempts, timeout=60)
+        if new_attempts >= 5:
+            return render(request, 'auth/login.html', {
+                'error': 'Too many login attempts. Please try again in a minute.'
+            })
         email = request.POST.get('email')
         password = request.POST.get('password')
         try:
@@ -77,7 +82,12 @@ def register_view(request):
             return redirect('dashboard')
 
     if request.method == 'POST':
-        cache.set(cache_key, attempts + 1, timeout=60)
+        new_attempts = (attempts or 0) + 1
+        cache.set(cache_key, new_attempts, timeout=60)
+        if new_attempts >= 5:
+            return render(request, 'auth/register.html', {
+                'error': 'Too many registration attempts. Please try again later.'
+            })
         email = request.POST.get('email')
         username = request.POST.get('username')
         password = request.POST.get('password')

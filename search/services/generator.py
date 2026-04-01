@@ -14,7 +14,7 @@ class AnswerGenerator:
 
     def __init__(self):
         self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-        self.model = "models/gemini-2.0-flash-lite"
+        self.model = "models/gemini-2.5-flash-lite"
 
     def generate(self, question: str, chunks: list[dict]) -> dict:
         """
