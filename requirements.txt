@@ -18,6 +18,7 @@ django-celery-results==2.5.1    # Store Celery results in Django DB
 django-celery-beat==2.7.0       # Periodic task scheduler
 
 # ── AI / RAG Pipeline ──
+google-genai==0.8.0
 langchain==0.3.25               # LLM orchestration framework
 langchain-openai==0.3.14        # OpenAI integration
 langchain-google-genai==2.1.4   # Gemini integration
