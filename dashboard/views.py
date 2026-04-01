@@ -6,11 +6,13 @@ from django.views.decorators.http import require_http_methods
 from django.http import HttpResponse
 from django.utils.text import slugify
 from django.core.cache import cache
+from django.db.models import Sum, Count
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 from tenants.models import Organization, Membership
 from documents.models import Document
 from search.models import QueryLog
+from audit.models import AuditLog
 from django_ratelimit.decorators import ratelimit
 from audit.services import log_action
 from documents.utils import sanitize_text
@@ -128,6 +130,14 @@ def get_user_org(request):
     return membership.organization if membership else None
 
 
+def get_user_role(request, org):
+    """Returns the role string for the current user in the given org."""
+    membership = Membership.objects.filter(
+        user=request.user, organization=org, is_active=True
+    ).first()
+    return membership.role if membership else None
+
+
 @login_required
 def dashboard(request):
     org = get_user_org(request)
@@ -139,23 +149,38 @@ def dashboard(request):
     month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0)
 
     documents = Document.objects.filter(organization=org).order_by('-created_at')[:10]
-    total_queries = QueryLog.objects.filter(
+
+    # Monthly query stats
+    monthly_queries = QueryLog.objects.filter(
         organization=org,
         created_at__gte=month_start
-    ).count()
+    )
+    total_queries = monthly_queries.count()
+
+    # Token consumption — aggregate from QueryLog
+    token_data = monthly_queries.aggregate(total_tokens=Sum('tokens_used'))
+    total_tokens = token_data['total_tokens'] or 0
+
+    role = get_user_role(request, org)
 
     return render(request, 'dashboard/dashboard.html', {
         'org_name': org.name,
         'total_documents': Document.objects.filter(organization=org).count(),
         'ready_documents': Document.objects.filter(organization=org, status='READY').count(),
         'total_queries': total_queries,
+        'total_tokens': total_tokens,
         'documents': documents,
+        'user_role': role,
     })
 
 
 @login_required
 def upload_view(request):
     org = get_user_org(request)
+    role = get_user_role(request, org)
+    # VIEWER cannot upload — redirect to dashboard with message
+    if role == Membership.Role.VIEWER:
+        return redirect('dashboard')
     return render(request, 'dashboard/upload.html', {
         'org_id': str(org.id) if org else '',
     })
@@ -172,6 +197,28 @@ def chat_view(request):
 
 
 @login_required
+def audit_log_view(request):
+    """
+    Audit log page — visible to OWNER only.
+    Shows every action taken in the organization with actor + timestamp.
+    """
+    org = get_user_org(request)
+    role = get_user_role(request, org)
+
+    if role != Membership.Role.OWNER:
+        return redirect('dashboard')
+
+    logs = AuditLog.objects.filter(
+        organization=org
+    ).select_related('user').order_by('-created_at')[:200]
+
+    return render(request, 'dashboard/audit.html', {
+        'logs': logs,
+        'org_name': org.name,
+    })
+
+
+@login_required
 @require_http_methods(["POST"])
 @ratelimit(key='ip', rate='10/m', block=False)
 def upload_document(request):
@@ -182,6 +229,12 @@ def upload_document(request):
     from documents.tasks import ingest_document
 
     org = get_user_org(request)
+
+    # VIEWER enforcement at the view level too
+    role = get_user_role(request, org)
+    if role == Membership.Role.VIEWER:
+        return HttpResponse('<div class="alert alert-error">Viewers cannot upload documents.</div>')
+
     file = request.FILES.get('file')
     raw_title = request.POST.get('title', file.name if file else 'Untitled')
     title = sanitize_text(raw_title)

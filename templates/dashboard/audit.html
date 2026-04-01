@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Audit Log — DocuMind{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <h1 class="page-title">Audit Log</h1>
+            <p class="page-subtitle">{{ org_name }} — every action, every actor, every timestamp</p>
+        </div>
+        <a href="{% url 'dashboard' %}" class="btn" style="background:var(--surface-2);color:var(--text-secondary);">
+            ← Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    {% if logs %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>IP Address</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td style="color:var(--text-muted);font-size:12px;white-space:nowrap;">
+                        {{ log.created_at|date:"M d, Y H:i:s" }}
+                    </td>
+                    <td style="color:var(--text-primary);">
+                        {{ log.user.email|default:"System" }}
+                    </td>
+                    <td>
+                        <span style="
+                            background:var(--accent-dim);
+                            color:var(--accent-light);
+                            padding:2px 8px;
+                            border-radius:4px;
+                            font-size:11px;
+                            font-weight:600;
+                            font-family:monospace;
+                        ">{{ log.action }}</span>
+                    </td>
+                    <td style="color:var(--text-muted);font-size:12px;font-family:monospace;">
+                        {{ log.ip_address|default:"—" }}
+                    </td>
+                    <td style="color:var(--text-secondary);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        {% if log.payload %}
+                            {{ log.payload }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p style="color:var(--text-muted);font-size:12px;margin-top:16px;text-align:right;">
+        Showing latest {{ logs|length }} entries
+    </p>
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;">
+        <p style="color:var(--text-secondary);font-size:15px;">No audit events recorded yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

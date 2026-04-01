@@ -6,15 +6,18 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Document
 from .serializers import DocumentUploadSerializer, DocumentListSerializer, DocumentDetailSerializer
 from .tasks import ingest_document
-from tenants.permissions import IsTenantMember, IsTenantAdmin
+from tenants.permissions import IsTenantMember, IsTenantContributor, IsTenantAdmin
 
 logger = structlog.get_logger(__name__)
 
 
 class DocumentUploadView(generics.CreateAPIView):
-    """Upload a document and trigger async ingestion pipeline."""
+    """
+    Upload a document and trigger async ingestion pipeline.
+    Requires MEMBER role or above — VIEWER cannot upload.
+    """
     serializer_class = DocumentUploadSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsTenantContributor]
     parser_classes = [MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
@@ -22,7 +25,6 @@ class DocumentUploadView(generics.CreateAPIView):
             organization=self.request.organization,
             uploaded_by=self.request.user
         )
-        # Fire Celery task asynchronously
         ingest_document.delay(str(document.id))
         logger.info("document_upload_queued", document_id=str(document.id))
 
@@ -35,12 +37,15 @@ class DocumentUploadView(generics.CreateAPIView):
                 'message': 'Document uploaded. Processing started.',
                 'document': serializer.data
             },
-            status=status.HTTP_202_ACCEPTED  # 202 = accepted but not yet processed
+            status=status.HTTP_202_ACCEPTED
         )
 
 
 class DocumentListView(generics.ListAPIView):
-    """List all documents for the current tenant."""
+    """
+    List all documents for the current tenant.
+    All roles including VIEWER can see the document list.
+    """
     serializer_class = DocumentListSerializer
     permission_classes = [IsAuthenticated, IsTenantMember]
 
@@ -51,7 +56,11 @@ class DocumentListView(generics.ListAPIView):
 
 
 class DocumentDetailView(generics.RetrieveDestroyAPIView):
-    """Get or delete a specific document."""
+    """
+    Get or delete a specific document.
+    - GET: any member including VIEWER
+    - DELETE: ADMIN or OWNER only
+    """
     serializer_class = DocumentDetailSerializer
     permission_classes = [IsAuthenticated, IsTenantMember]
 
@@ -59,25 +68,20 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
         return Document.objects.filter(organization=self.request.organization)
 
     def destroy(self, request, *args, **kwargs):
-        document = self.get_object()
-        # Only admins can delete
-        from tenants.models import Membership
-        org_id = request.headers.get('X-Organization-ID')
-        is_admin = Membership.objects.filter(
-            user=request.user,
-            organization_id=org_id,
-            role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
-            is_active=True
-        ).exists()
-
-        if not is_admin:
+        # Enforce admin-only delete using the permission class directly
+        admin_permission = IsTenantAdmin()
+        if not admin_permission.has_permission(request, self):
             return Response(
                 {'error': 'Only admins can delete documents.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        document.file.delete(save=False)  # Delete physical file too
+        document = self.get_object()
+        document.file.delete(save=False)
         document.delete()
+        logger.info("document_deleted",
+                    document_id=str(document.id),
+                    deleted_by=str(request.user.id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Create your views here.

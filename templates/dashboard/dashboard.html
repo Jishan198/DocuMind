@@ -7,10 +7,21 @@
             <h1 class="page-title">Dashboard</h1>
             <p class="page-subtitle">{{ org_name }} workspace</p>
         </div>
-        <a href="{% url 'upload' %}" class="btn btn-primary">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Upload Document
-        </a>
+        <div style="display:flex;gap:10px;align-items:center;">
+            {% if user_role == 'OWNER' %}
+            <a href="{% url 'audit_log' %}" class="btn" style="background:var(--surface-2);color:var(--text-secondary);font-size:13px;">
+                🔍 Audit Log
+            </a>
+            {% endif %}
+            {% if user_role != 'VIEWER' %}
+            <a href="{% url 'upload' %}" class="btn btn-primary">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Upload Document
+            </a>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -27,12 +38,18 @@
         <div class="stat-label">Queries This Month</div>
         <div class="stat-value">{{ total_queries }}</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-label">Tokens Used This Month</div>
+        <div class="stat-value">{{ total_tokens|floatformat:0 }}</div>
+    </div>
 </div>
 
 <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
         <div class="card-title" style="margin-bottom:0;">Recent Documents</div>
+        {% if user_role != 'VIEWER' %}
         <a href="{% url 'upload' %}" style="font-size:13px;color:var(--accent-light);text-decoration:none;">View all →</a>
+        {% endif %}
     </div>
     {% if documents %}
     <div class="table-wrap">
@@ -51,7 +68,9 @@
                 <tr>
                     <td style="color:var(--text-primary);font-weight:450;">{{ doc.title }}</td>
                     <td>
-                        <span style="background:var(--accent-dim);color:var(--accent-light);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">{{ doc.file_type }}</span>
+                        <span style="background:var(--accent-dim);color:var(--accent-light);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+                            {{ doc.file_type }}
+                        </span>
                     </td>
                     <td><span class="badge badge-{{ doc.status|lower }}">{{ doc.status }}</span></td>
                     <td>{{ doc.chunk_count }}</td>
@@ -64,11 +83,15 @@
     {% else %}
     <div style="text-align:center;padding:60px 20px;">
         <div style="width:56px;height:56px;background:var(--accent-dim);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-            <svg width="24" height="24" fill="none" stroke="var(--accent-light)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <svg width="24" height="24" fill="none" stroke="var(--accent-light)" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
         </div>
         <p style="color:var(--text-secondary);font-size:15px;margin-bottom:6px;">No documents yet</p>
         <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Upload your first document to get started</p>
+        {% if user_role != 'VIEWER' %}
         <a href="{% url 'upload' %}" class="btn btn-primary">Upload Document</a>
+        {% endif %}
     </div>
     {% endif %}
 </div>
