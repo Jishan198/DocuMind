@@ -51,3 +51,9 @@ django-debug-toolbar==5.1.0     # Debug toolbar (dev only)
 python-decouple==3.8            # Environment variable management
 gunicorn==23.0.0                # Production WSGI server
 whitenoise==6.9.0               # Static file serving
+
+#testing
+pytest==8.3.5
+pytest-django==4.9.0
+pytest-cov==6.1.0
+factory-boy==3.3.3

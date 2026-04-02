@@ -19,6 +19,8 @@ class AuditLog(models.Model):
         Organization,
         on_delete=models.CASCADE,
         related_name='audit_logs',
+        null=True,  
+        blank=True, 
         help_text="The organization context for this action"
     )
     
